@@ -497,59 +497,39 @@ with tabs[4]:
     st.header("Settings — Plans & Durations")
     st.write("Define plans and their default durations (months). These are used as defaults when adding new members.")
 
-    plans_df = pd.DataFrame([{"Plan": p, "DurationMonths": m} for p, m in plans.items()])
-    edited = st.data_editor(plans_df, num_rows="dynamic")
-    if st.button("Save Plans"):
-        # sanitize and save
-        new_plans = {row['Plan']: int(row['DurationMonths']) for _, row in edited.iterrows()}
-        save_plans(new_plans)
-        st.success("Plans saved. New plans will be available when adding new members.")
-        st.rerun()
+plans_df = pd.DataFrame([{"Plan": p, "DurationMonths": m} for p, m in plans.items()])
+edited = st.data_editor(plans_df, num_rows="dynamic")
+if st.button("Save Plans"):
+    # sanitize and save
+    new_plans = {row['Plan']: int(row['DurationMonths']) for _, row in edited.iterrows()}
+    save_plans(new_plans)
+    st.success("Plans saved. New plans will be available when adding members.")
+    st.rerun()
 
-    st.markdown("---")
-    st.subheader("Manual CSV Management")
-    st.write("You can download or upload the members CSV. Use upload cautiously — it will replace current data.")
+st.markdown("---")
+st.subheader("Manual CSV Management")
+st.write("You can download or upload the members CSV. Use upload cautiously — it will replace current data.")
+dl = st.download_button("Download members CSV", data=members.to_csv(index=False).encode('utf-8'), file_name="members.csv", mime='text/csv')
 
-    # Download current members
-    dl = st.download_button(
-        "Download members CSV",
-        data=members.to_csv(index=False).encode('utf-8'),
-        file_name="members.csv",
-        mime='text/csv'
-    )
+uploaded = st.file_uploader("Upload a members CSV to replace current dataset", type=["csv"])
+if uploaded is not None:
+    confirm = st.checkbox("I understand this will replace the current members data")
+    if confirm:
+        new_df = pd.read_csv(uploaded)
+        # basic validation
+        required = set(["Member ID", "Name", "Start Date", "End Date", "Plan Type"])
+        if not required.issubset(set(new_df.columns)):
+            st.error(f"Uploaded CSV must contain columns: {required}")
+        else:
+            # coerce dates
+            for col in ["Start Date", "End Date"]:
+                new_df[col] = pd.to_datetime(new_df[col], errors='coerce').dt.date
+            new_df = refresh_status(new_df)
+            save_members(new_df)
+            st.success("Members CSV replaced successfully.")
+            st.rerun()
 
-    # Upload new members CSV
-    uploaded = st.file_uploader("Upload a members CSV to replace current dataset", type=["csv"])
-    if uploaded is not None:
-        confirm = st.checkbox("I understand this will replace the current members data")
-        if confirm:
-            new_df = pd.read_csv(uploaded)
 
-            # basic validation
-            required = set(["Member ID", "Name", "Start Date", "End Date", "Plan Type"])
-            if not required.issubset(set(new_df.columns)):
-                st.error(f"Uploaded CSV must contain columns: {required}")
-            else:
-                # --- Robust date parsing ---
-                for col in ["Start Date", "End Date"]:
-                    # Strip whitespace and enforce YYYY-MM-DD
-                    new_df[col] = pd.to_datetime(
-                        new_df[col].astype(str).str.strip(),
-                        format="%Y-%m-%d",   # enforce consistent format
-                        errors="coerce"
-                    ).dt.date
-
-                # Debug: show rows where parsing failed
-                bad_rows = new_df[new_df["End Date"].isna()]
-                if not bad_rows.empty:
-                    st.warning("Some End Date values could not be parsed. Check these rows:")
-                    st.dataframe(bad_rows)
-
-                # Refresh status and save
-                new_df = refresh_status(new_df)
-                save_members(new_df)
-                st.success("Members CSV replaced successfully.")
-                st.rerun()
 # -------------------------
 # END
 # -------------------------
