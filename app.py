@@ -26,19 +26,22 @@ def ensure_files_exist():
         pd.DataFrame([{"Plan":p,"DurationMonths":m} for p,m in DEFAULT_PLANS.items()]).to_csv(PLANS_FILE,index=False)
 
 def load_members():
-    df = pd.read_csv(DATA_FILE,dtype=str)
-    for col in ["Start Date","End Date"]:
+    df = pd.read_csv(DATA_FILE, dtype=str)
+    for col in ["Start Date", "End Date"]:
         if col in df.columns:
-            df[col] = pd.to_datetime(df[col],errors="coerce").dt.date
+            # Use exact format to avoid parser ambiguity
+            df[col] = pd.to_datetime(df[col], format="%d-%m-%Y", errors="coerce")
         else:
             df[col] = pd.NaT
     return df
 
+
 def save_members(df):
     df = df.copy()
-    for col in ["Start Date","End Date"]:
-        df[col] = df[col].apply(lambda x: x.strftime(DATE_FORMAT) if pd.notna(x) and isinstance(x,date) else (str(x) if pd.notna(x) else ""))
-    df.to_csv(DATA_FILE,index=False)
+    for col in ["Start Date", "End Date"]:
+        df[col] = df[col].apply(lambda x: x.strftime(DATE_FORMAT) if pd.notna(x) else "")
+    df.to_csv(DATA_FILE, index=False)
+
 
 def load_plans():
     df = pd.read_csv(PLANS_FILE,dtype={"Plan":str,"DurationMonths":int})
@@ -520,13 +523,13 @@ with tabs[4]:
             if not required.issubset(set(new_df.columns)):
                 st.error(f"Uploaded CSV must contain columns: {required}")
             else:
-                # coerce dates
                 for col in ["Start Date", "End Date"]:
-                    new_df[col] = pd.to_datetime(new_df[col], errors='coerce').dt.date
+                    new_df[col] = pd.to_datetime(new_df[col], format="%d-%m-%Y", errors='coerce')
                 new_df = refresh_status(new_df)
                 save_members(new_df)
                 st.success("Members CSV replaced successfully.")
                 st.rerun()
+
 
 # -------------------------
 # END
