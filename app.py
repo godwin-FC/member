@@ -13,67 +13,87 @@ DATA_FILE = "members.csv"
 PLANS_FILE = "plans.csv"
 DATE_FORMAT = "%Y-%m-%d"
 
-DEFAULT_PLANS = {"Bronze":3,"Silver":6,"Gold":9,"Platinum":12}
+DEFAULT_PLANS = {"Bronze": 3, "Silver": 6, "Gold": 9, "Platinum": 12}
 
 # -------------------------
-# Utilities
+# UTILITIES
 # -------------------------
 def ensure_files_exist():
     if not os.path.exists(DATA_FILE):
-        df = pd.DataFrame(columns=["Member ID","Name","Email","Phone","Start Date","End Date","Plan Type","Status","Notes"])
-        df.to_csv(DATA_FILE,index=False)
+        df = pd.DataFrame(columns=["Member ID", "Name", "Email", "Phone",
+                                   "Start Date", "End Date", "Plan Type", "Status", "Notes"])
+        df.to_csv(DATA_FILE, index=False, encoding="utf-8")
     if not os.path.exists(PLANS_FILE):
-        pd.DataFrame([{"Plan":p,"DurationMonths":m} for p,m in DEFAULT_PLANS.items()]).to_csv(PLANS_FILE,index=False)
+        pd.DataFrame([{"Plan": p, "DurationMonths": m} for p, m in DEFAULT_PLANS.items()]).to_csv(
+            PLANS_FILE, index=False, encoding="utf-8"
+        )
 
-def load_members():
-    df = pd.read_csv(DATA_FILE,dtype=str)
-    for col in ["Start Date","End Date"]:
+
+def parse_dates(df):
+    """Parse Start/End Date columns consistently."""
+    for col in ["Start Date", "End Date"]:
         if col in df.columns:
-            df[col] = pd.to_datetime(df[col],errors="coerce").dt.date
+            df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce").dt.date
         else:
             df[col] = pd.NaT
     return df
 
+
+def load_members():
+    df = pd.read_csv(DATA_FILE, dtype=str, encoding="utf-8")
+    df = parse_dates(df)
+    return df
+
+
 def save_members(df):
     df = df.copy()
-    for col in ["Start Date","End Date"]:
-        df[col] = df[col].apply(lambda x: x.strftime(DATE_FORMAT) if pd.notna(x) and isinstance(x,date) else (str(x) if pd.notna(x) else ""))
-    df.to_csv(DATA_FILE,index=False)
+    for col in ["Start Date", "End Date"]:
+        df[col] = df[col].apply(
+            lambda x: x.strftime(DATE_FORMAT)
+            if pd.notna(x) and isinstance(x, date)
+            else (str(x) if pd.notna(x) else "")
+        )
+    df.to_csv(DATA_FILE, index=False, encoding="utf-8")
+
 
 def load_plans():
-    df = pd.read_csv(PLANS_FILE,dtype={"Plan":str,"DurationMonths":int})
-    return dict(zip(df["Plan"],df["DurationMonths"]))
+    df = pd.read_csv(PLANS_FILE, dtype={"Plan": str, "DurationMonths": int}, encoding="utf-8")
+    return dict(zip(df["Plan"], df["DurationMonths"]))
+
 
 def save_plans(plans_dict):
-    pd.DataFrame([{"Plan":p,"DurationMonths":m} for p,m in plans_dict.items()]).to_csv(PLANS_FILE,index=False)
+    pd.DataFrame(
+        [{"Plan": p, "DurationMonths": m} for p, m in plans_dict.items()]
+    ).to_csv(PLANS_FILE, index=False, encoding="utf-8")
+
 
 def generate_member_id(df):
-    existing = df.get("Member ID",pd.Series(dtype=str)).dropna().astype(str)
+    existing = df.get("Member ID", pd.Series(dtype=str)).dropna().astype(str)
     nums = [int(v[1:]) for v in existing if v.startswith("M") and v[1:].isdigit()]
     return f"M{max(nums)+1:04d}" if nums else "M0001"
 
+
 def refresh_status(df):
     today = date.today()
-    # Ensure End Date is datetime
-    df["End Date"] = pd.to_datetime(df["End Date"], errors='coerce')
-    
-    # Compare using .date()
+    df["End Date"] = pd.to_datetime(df["End Date"], errors="coerce")
     df["Status"] = df["End Date"].apply(
-        lambda end: "Active" if pd.notna(end) and end.date() >= today 
-                    else ("Expired" if pd.notna(end) else "Unknown")
+        lambda end: "Active"
+        if pd.notna(end) and end.date() >= today
+        else ("Expired" if pd.notna(end) else "Unknown")
     )
     return df
 
 
-def plan_end_date(start,plan,plans):
-    months = plans.get(plan,12)
-    year = start.year + (start.month-1 + months)//12
-    month = (start.month-1 + months)%12 + 1
-    day = min(start.day,28)
-    return date(year,month,day)
+def plan_end_date(start, plan, plans):
+    months = plans.get(plan, 12)
+    year = start.year + (start.month - 1 + months) // 12
+    month = (start.month - 1 + months) % 12 + 1
+    day = min(start.day, 28)
+    return date(year, month, day)
+
 
 # -------------------------
-# Load data
+# LOAD DATA
 # -------------------------
 ensure_files_exist()
 members = load_members()
@@ -82,9 +102,10 @@ members = refresh_status(members)
 save_members(members)
 
 # -------------------------
-# SESSION STATE INIT
+# SESSION STATE
 # -------------------------
-for key in ["member_id", "name", "email", "phone", "start_date", "plan_choice", "notes", "add_member_reset"]:
+for key in ["member_id", "name", "email", "phone", "start_date",
+            "plan_choice", "notes", "add_member_reset"]:
     if key not in st.session_state:
         if key == "member_id":
             st.session_state[key] = generate_member_id(members)
@@ -96,6 +117,7 @@ for key in ["member_id", "name", "email", "phone", "start_date", "plan_choice", 
             st.session_state[key] = True
         else:
             st.session_state[key] = ""
+
 
 # -------------------------
 # Layout tabs
@@ -491,7 +513,7 @@ with tabs[3]:
                 st.rerun()
 
 # -------------------------
-# SETTINGS
+# SETTINGS TAB (FIXED UPLOAD SPEED + DATE PARSING)
 # -------------------------
 with tabs[4]:
     st.header("Settings — Plans & Durations")
@@ -499,9 +521,9 @@ with tabs[4]:
 
     plans_df = pd.DataFrame([{"Plan": p, "DurationMonths": m} for p, m in plans.items()])
     edited = st.data_editor(plans_df, num_rows="dynamic")
+
     if st.button("Save Plans"):
-        # sanitize and save
-        new_plans = {row['Plan']: int(row['DurationMonths']) for _, row in edited.iterrows()}
+        new_plans = {row["Plan"]: int(row["DurationMonths"]) for _, row in edited.iterrows()}
         save_plans(new_plans)
         st.success("Plans saved. New plans will be available when adding members.")
         st.rerun()
@@ -509,29 +531,30 @@ with tabs[4]:
     st.markdown("---")
     st.subheader("Manual CSV Management")
     st.write("You can download or upload the members CSV. Use upload cautiously — it will replace current data.")
-    dl = st.download_button("Download members CSV", data=members.to_csv(index=False).encode('utf-8'), file_name="members.csv", mime='text/csv')
 
-uploaded = st.file_uploader("Upload a members CSV to replace current dataset", type=["csv"])
-if uploaded is not None:
-    confirm = st.checkbox("I understand this will replace the current members data")
-    if confirm:
-        new_df = pd.read_csv(uploaded)
-        # basic validation
-        required = set(["Member ID", "Name", "Start Date", "End Date", "Plan Type"])
-        if not required.issubset(set(new_df.columns)):
-            st.error(f"Uploaded CSV must contain columns: {required}")
-        else:
-            # coerce dates
-            for col in ["Start Date", "End Date"]:
-                new_df[col] = pd.to_datetime(new_df[col], errors='coerce').dt.date
-            new_df = refresh_status(new_df)
-            
-            # update in-memory members without rerun
-            members[:] = new_df
-            save_members(members)
-            st.success("Members CSV replaced successfully.")
+    st.download_button(
+        "Download members CSV",
+        data=members.to_csv(index=False).encode("utf-8"),
+        file_name="members.csv",
+        mime="text/csv"
+    )
 
+    uploaded = st.file_uploader("Upload a members CSV to replace current dataset", type=["csv"])
+    if uploaded is not None:
+        confirm = st.checkbox("I understand this will replace the current members data")
+        if confirm:
+            new_df = pd.read_csv(uploaded, dtype=str, encoding="utf-8")
+            required = {"Member ID", "Name", "Start Date", "End Date", "Plan Type"}
+            if not required.issubset(set(new_df.columns)):
+                st.error(f"Uploaded CSV must contain columns: {required}")
+            else:
+                new_df = parse_dates(new_df)
+                new_df = refresh_status(new_df)
 
+                # Instant update without rerun
+                members[:] = new_df
+                save_members(members)
+                st.success("✅ Members CSV replaced successfully — no reload required.")
 # -------------------------
 # END
 # -------------------------
