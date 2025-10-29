@@ -54,11 +54,16 @@ def generate_member_id(df):
 
 def refresh_status(df):
     today = date.today()
-    if df.empty:
-        return df
-    df = df.copy()
-    df["Status"] = df["End Date"].apply(lambda end: "Active" if pd.notna(end) and end >= today else ("Expired" if pd.notna(end) else "Unknown"))
+    # Ensure End Date is datetime
+    df["End Date"] = pd.to_datetime(df["End Date"], errors='coerce')
+    
+    # Compare using .date()
+    df["Status"] = df["End Date"].apply(
+        lambda end: "Active" if pd.notna(end) and end.date() >= today 
+                    else ("Expired" if pd.notna(end) else "Unknown")
+    )
     return df
+
 
 def plan_end_date(start,plan,plans):
     months = plans.get(plan,12)
@@ -75,6 +80,22 @@ members = load_members()
 plans = load_plans()
 members = refresh_status(members)
 save_members(members)
+
+# -------------------------
+# SESSION STATE INIT
+# -------------------------
+for key in ["member_id", "name", "email", "phone", "start_date", "plan_choice", "notes", "add_member_reset"]:
+    if key not in st.session_state:
+        if key == "member_id":
+            st.session_state[key] = generate_member_id(members)
+        elif key == "start_date":
+            st.session_state[key] = date.today()
+        elif key == "plan_choice":
+            st.session_state[key] = list(plans.keys())[0] if plans else "Bronze"
+        elif key == "add_member_reset":
+            st.session_state[key] = True
+        else:
+            st.session_state[key] = ""
 
 # -------------------------
 # Layout tabs
@@ -253,11 +274,10 @@ with tabs[1]:
             st.rerun()
     else:
         st.info("No members to delete.")
-        # ---------------- Expiring Soon ----------------
+
     st.subheader("Expiring Soon")
     if not members.empty:
         soon = date.today() + timedelta(days=30)
-        # Ensure End Date is date type
         end_dates = pd.to_datetime(members["End Date"], errors='coerce').dt.date
         expiring_soon = members[end_dates.notna() & (end_dates <= soon)]
         if not expiring_soon.empty:
@@ -266,6 +286,7 @@ with tabs[1]:
             st.info("No members expiring in the next 30 days.")
     else:
         st.info("No members in the system.")
+
         
 with tabs[2]:
     st.subheader("➕ Add New Member")
