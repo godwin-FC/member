@@ -11,7 +11,7 @@ import altair as alt
 st.set_page_config(page_title="Membership Tracker — Business Edition", layout="wide")
 DATA_FILE = "members.csv"
 PLANS_FILE = "plans.csv"
-DATE_FORMAT = "%d-%m-%Y"
+DATE_FORMAT = "%Y-%m-%d"
 
 DEFAULT_PLANS = {"Bronze":3,"Silver":6,"Gold":9,"Platinum":12}
 
@@ -26,19 +26,19 @@ def ensure_files_exist():
         pd.DataFrame([{"Plan":p,"DurationMonths":m} for p,m in DEFAULT_PLANS.items()]).to_csv(PLANS_FILE,index=False)
 
 def load_members():
-    df = pd.read_csv(DATA_FILE, dtype=str)
-    for col in ["Start Date", "End Date"]:
+    df = pd.read_csv(DATA_FILE,dtype=str)
+    for col in ["Start Date","End Date"]:
         if col in df.columns:
-            df[col] = pd.to_datetime(df[col], format="%d-%m-%Y", errors="coerce")
+            df[col] = pd.to_datetime(df[col],errors="coerce").dt.date
         else:
             df[col] = pd.NaT
     return df
 
 def save_members(df):
     df = df.copy()
-    for col in ["Start Date", "End Date"]:
-        df[col] = df[col].apply(lambda x: x.strftime(DATE_FORMAT) if pd.notna(x) else "")
-    df.to_csv(DATA_FILE, index=False)
+    for col in ["Start Date","End Date"]:
+        df[col] = df[col].apply(lambda x: x.strftime(DATE_FORMAT) if pd.notna(x) and isinstance(x,date) else (str(x) if pd.notna(x) else ""))
+    df.to_csv(DATA_FILE,index=False)
 
 def load_plans():
     df = pd.read_csv(PLANS_FILE,dtype={"Plan":str,"DurationMonths":int})
@@ -53,13 +53,17 @@ def generate_member_id(df):
     return f"M{max(nums)+1:04d}" if nums else "M0001"
 
 def refresh_status(df):
-    today = pd.Timestamp(date.today())  # convert date.today() to Timestamp
+    today = date.today()
+    # Ensure End Date is datetime
     df["End Date"] = pd.to_datetime(df["End Date"], errors='coerce')
+    
+    # Compare using .date()
     df["Status"] = df["End Date"].apply(
-        lambda end: "Active" if pd.notna(end) and end >= today
+        lambda end: "Active" if pd.notna(end) and end.date() >= today 
                     else ("Expired" if pd.notna(end) else "Unknown")
     )
     return df
+
 
 def plan_end_date(start,plan,plans):
     months = plans.get(plan,12)
@@ -85,7 +89,7 @@ for key in ["member_id", "name", "email", "phone", "start_date", "plan_choice", 
         if key == "member_id":
             st.session_state[key] = generate_member_id(members)
         elif key == "start_date":
-            st.session_state[key] = pd.Timestamp(date.today())  # convert to Timestamp
+            st.session_state[key] = date.today()
         elif key == "plan_choice":
             st.session_state[key] = list(plans.keys())[0] if plans else "Bronze"
         elif key == "add_member_reset":
@@ -116,13 +120,13 @@ with tabs[0]:
     retention_rate = (active / total * 100) if total else 0
 
     # New signups this month
-    today = pd.Timestamp(date.today())  # use Timestamp for comparisons
+    today = date.today()
     if not members.empty:
-        start_dates = pd.to_datetime(members["Start Date"], errors="coerce")
+        start_dates = pd.to_datetime(members["Start Date"], errors="coerce").dt.date
         this_month = members[
             (start_dates.notna())
-            & (start_dates.dt.month == today.month)
-            & (start_dates.dt.year == today.year)
+            & (pd.Series(start_dates).apply(lambda d: d.month) == today.month)
+            & (pd.Series(start_dates).apply(lambda d: d.year) == today.year)
         ]
         new_signups = len(this_month)
     else:
@@ -161,10 +165,10 @@ with tabs[0]:
         c1.altair_chart(chart1, use_container_width=True)
 
         # Monthly renewals (last 12 months)
-        last_12 = today - pd.DateOffset(days=365)
+        last_12 = today - timedelta(days=365)
         end_dates = pd.to_datetime(members["End Date"], errors="coerce")
         df_ends = pd.DataFrame({"end": end_dates})
-        df_ends = df_ends[df_ends["end"] >= last_12]
+        df_ends = df_ends[df_ends["end"] >= pd.Timestamp(last_12)]
 
         if not df_ends.empty:
             df_ends["month"] = df_ends["end"].dt.to_period("M").dt.to_timestamp()
@@ -195,7 +199,7 @@ with tabs[0]:
         members["End Date"] = pd.to_datetime(members["End Date"], errors="coerce")
 
         last_12 = today - timedelta(days=365)
-        months = pd.date_range(start=last_12, end=today, freq="ME")
+        months = pd.date_range(start=last_12, end=today, freq="M")
         retention_data = []
         for m in months:
             total_at_month = members[members["Start Date"] <= m].shape[0]
@@ -273,25 +277,15 @@ with tabs[1]:
 
     st.subheader("Expiring Soon")
     if not members.empty:
-        # ensure 'End Date' is proper datetime
-        members['End Date'] = pd.to_datetime(members['End Date'], format="%d-%m-%Y", errors='coerce')
-
-        soon = pd.Timestamp(date.today() + timedelta(days=30))
-        end_dates = members['End Date']
-
-        # filter only valid dates that are <= 30 days from today
-        mask = end_dates.notna() & (end_dates <= soon)
-        expiring_soon = members[mask]
-
+        soon = date.today() + timedelta(days=30)
+        end_dates = pd.to_datetime(members["End Date"], errors='coerce').dt.date
+        expiring_soon = members[end_dates.notna() & (end_dates <= soon)]
         if not expiring_soon.empty:
-            st.dataframe(
-                expiring_soon.sort_values("End Date", na_position='last').reset_index(drop=True)
-            )
+            st.dataframe(expiring_soon.sort_values("End Date", na_position='last').reset_index(drop=True))
         else:
             st.info("No members expiring in the next 30 days.")
     else:
         st.info("No members in the system.")
-
 
         
 with tabs[2]:
@@ -527,13 +521,13 @@ with tabs[4]:
             if not required.issubset(set(new_df.columns)):
                 st.error(f"Uploaded CSV must contain columns: {required}")
             else:
+                # coerce dates
                 for col in ["Start Date", "End Date"]:
-                    new_df[col] = pd.to_datetime(new_df[col], format="%d-%m-%Y", errors='coerce')
+                    new_df[col] = pd.to_datetime(new_df[col], errors='coerce').dt.date
                 new_df = refresh_status(new_df)
                 save_members(new_df)
                 st.success("Members CSV replaced successfully.")
                 st.rerun()
-
 
 # -------------------------
 # END
