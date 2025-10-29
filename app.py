@@ -199,7 +199,7 @@ with tabs[0]:
         members["End Date"] = pd.to_datetime(members["End Date"], errors="coerce")
 
         last_12 = today - timedelta(days=365)
-        months = pd.date_range(start=last_12, end=today, freq="M")
+        months = pd.date_range(start=last_12, end=today, freq="ME")
         retention_data = []
         for m in months:
             total_at_month = members[members["Start Date"] <= m].shape[0]
