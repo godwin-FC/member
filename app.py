@@ -53,16 +53,15 @@ def generate_member_id(df):
     return f"M{max(nums)+1:04d}" if nums else "M0001"
 
 def refresh_status(df):
-    today = date.today()
-    # Ensure End Date is datetime
+    today = pd.Timestamp(date.today())  # make 'today' a pandas Timestamp
     df["End Date"] = pd.to_datetime(df["End Date"], errors='coerce')
     
-    # Compare using .date()
     df["Status"] = df["End Date"].apply(
-        lambda end: "Active" if pd.notna(end) and end.date() >= today 
+        lambda end: "Active" if pd.notna(end) and end >= today
                     else ("Expired" if pd.notna(end) else "Unknown")
     )
     return df
+
 
 
 def plan_end_date(start,plan,plans):
