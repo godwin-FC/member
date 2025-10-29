@@ -29,19 +29,16 @@ def load_members():
     df = pd.read_csv(DATA_FILE, dtype=str)
     for col in ["Start Date", "End Date"]:
         if col in df.columns:
-            # Use exact format to avoid parser ambiguity
             df[col] = pd.to_datetime(df[col], format="%d-%m-%Y", errors="coerce")
         else:
             df[col] = pd.NaT
     return df
-
 
 def save_members(df):
     df = df.copy()
     for col in ["Start Date", "End Date"]:
         df[col] = df[col].apply(lambda x: x.strftime(DATE_FORMAT) if pd.notna(x) else "")
     df.to_csv(DATA_FILE, index=False)
-
 
 def load_plans():
     df = pd.read_csv(PLANS_FILE,dtype={"Plan":str,"DurationMonths":int})
@@ -56,16 +53,13 @@ def generate_member_id(df):
     return f"M{max(nums)+1:04d}" if nums else "M0001"
 
 def refresh_status(df):
-    today = pd.Timestamp(date.today())  # make 'today' a pandas Timestamp
+    today = pd.Timestamp(date.today())  # convert date.today() to Timestamp
     df["End Date"] = pd.to_datetime(df["End Date"], errors='coerce')
-    
     df["Status"] = df["End Date"].apply(
         lambda end: "Active" if pd.notna(end) and end >= today
                     else ("Expired" if pd.notna(end) else "Unknown")
     )
     return df
-
-
 
 def plan_end_date(start,plan,plans):
     months = plans.get(plan,12)
@@ -91,7 +85,7 @@ for key in ["member_id", "name", "email", "phone", "start_date", "plan_choice", 
         if key == "member_id":
             st.session_state[key] = generate_member_id(members)
         elif key == "start_date":
-            st.session_state[key] = date.today()
+            st.session_state[key] = pd.Timestamp(date.today())  # convert to Timestamp
         elif key == "plan_choice":
             st.session_state[key] = list(plans.keys())[0] if plans else "Bronze"
         elif key == "add_member_reset":
@@ -122,13 +116,13 @@ with tabs[0]:
     retention_rate = (active / total * 100) if total else 0
 
     # New signups this month
-    today = date.today()
+    today = pd.Timestamp(date.today())  # use Timestamp for comparisons
     if not members.empty:
-        start_dates = pd.to_datetime(members["Start Date"], errors="coerce").dt.date
+        start_dates = pd.to_datetime(members["Start Date"], errors="coerce")
         this_month = members[
             (start_dates.notna())
-            & (pd.Series(start_dates).apply(lambda d: d.month) == today.month)
-            & (pd.Series(start_dates).apply(lambda d: d.year) == today.year)
+            & (start_dates.dt.month == today.month)
+            & (start_dates.dt.year == today.year)
         ]
         new_signups = len(this_month)
     else:
@@ -167,10 +161,10 @@ with tabs[0]:
         c1.altair_chart(chart1, use_container_width=True)
 
         # Monthly renewals (last 12 months)
-        last_12 = today - timedelta(days=365)
+        last_12 = today - pd.DateOffset(days=365)
         end_dates = pd.to_datetime(members["End Date"], errors="coerce")
         df_ends = pd.DataFrame({"end": end_dates})
-        df_ends = df_ends[df_ends["end"] >= pd.Timestamp(last_12)]
+        df_ends = df_ends[df_ends["end"] >= last_12]
 
         if not df_ends.empty:
             df_ends["month"] = df_ends["end"].dt.to_period("M").dt.to_timestamp()
