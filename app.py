@@ -273,8 +273,8 @@ with tabs[1]:
 
     st.subheader("Expiring Soon")
     if not members.empty:
-        soon = date.today() + timedelta(days=30)
-        end_dates = pd.to_datetime(members["End Date"], errors='coerce').dt.date
+        soon = pd.Timestamp(date.today() + timedelta(days=30))  # <-- use Timestamp
+        end_dates = pd.to_datetime(members["End Date"], errors='coerce')  # <-- keep as Timestamp
         expiring_soon = members[end_dates.notna() & (end_dates <= soon)]
         if not expiring_soon.empty:
             st.dataframe(expiring_soon.sort_values("End Date", na_position='last').reset_index(drop=True))
@@ -282,6 +282,7 @@ with tabs[1]:
             st.info("No members expiring in the next 30 days.")
     else:
         st.info("No members in the system.")
+
 
         
 with tabs[2]:
