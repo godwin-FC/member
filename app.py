@@ -199,7 +199,7 @@ with tabs[0]:
         members["End Date"] = pd.to_datetime(members["End Date"], errors="coerce")
 
         last_12 = today - timedelta(days=365)
-        months = pd.date_range(start=last_12, end=today, freq="ME")
+        months = pd.date_range(start=last_12, end=today, freq="M")
         retention_data = []
         for m in months:
             total_at_month = members[members["Start Date"] <= m].shape[0]
@@ -497,19 +497,19 @@ with tabs[4]:
     st.header("Settings — Plans & Durations")
     st.write("Define plans and their default durations (months). These are used as defaults when adding new members.")
 
-plans_df = pd.DataFrame([{"Plan": p, "DurationMonths": m} for p, m in plans.items()])
-edited = st.data_editor(plans_df, num_rows="dynamic")
-if st.button("Save Plans"):
-    # sanitize and save
-    new_plans = {row['Plan']: int(row['DurationMonths']) for _, row in edited.iterrows()}
-    save_plans(new_plans)
-    st.success("Plans saved. New plans will be available when adding members.")
-    st.rerun()
+    plans_df = pd.DataFrame([{"Plan": p, "DurationMonths": m} for p, m in plans.items()])
+    edited = st.data_editor(plans_df, num_rows="dynamic")
+    if st.button("Save Plans"):
+        # sanitize and save
+        new_plans = {row['Plan']: int(row['DurationMonths']) for _, row in edited.iterrows()}
+        save_plans(new_plans)
+        st.success("Plans saved. New plans will be available when adding members.")
+        st.rerun()
 
-st.markdown("---")
-st.subheader("Manual CSV Management")
-st.write("You can download or upload the members CSV. Use upload cautiously — it will replace current data.")
-dl = st.download_button("Download members CSV", data=members.to_csv(index=False).encode('utf-8'), file_name="members.csv", mime='text/csv')
+    st.markdown("---")
+    st.subheader("Manual CSV Management")
+    st.write("You can download or upload the members CSV. Use upload cautiously — it will replace current data.")
+    dl = st.download_button("Download members CSV", data=members.to_csv(index=False).encode('utf-8'), file_name="members.csv", mime='text/csv')
 
 uploaded = st.file_uploader("Upload a members CSV to replace current dataset", type=["csv"])
 if uploaded is not None:
@@ -525,9 +525,11 @@ if uploaded is not None:
             for col in ["Start Date", "End Date"]:
                 new_df[col] = pd.to_datetime(new_df[col], errors='coerce').dt.date
             new_df = refresh_status(new_df)
-            save_members(new_df)
+            
+            # update in-memory members without rerun
+            members[:] = new_df
+            save_members(members)
             st.success("Members CSV replaced successfully.")
-            st.rerun()
 
 
 # -------------------------
