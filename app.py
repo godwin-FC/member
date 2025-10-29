@@ -50,7 +50,7 @@ def save_plans(plans_dict):
 def generate_member_id(df):
     existing = df.get("Member ID",pd.Series(dtype=str)).dropna().astype(str)
     nums = [int(v[1:]) for v in existing if v.startswith("M") and v[1:].isdigit()]
-    return f"M{max(nums)+1:04d}" if nums else "M001"
+    return f"M{max(nums)+1:04d}" if nums else "M0001"
 
 def refresh_status(df):
     today = date.today()
@@ -162,7 +162,7 @@ with tabs[0]:
                 tooltip=["Plan", "Count"]
             )
         )
-        c1.altair_chart(chart1, width='stretch')
+        c1.altair_chart(chart1, use_container_width=True)
 
         # Monthly renewals (last 12 months)
         last_12 = today - timedelta(days=365)
@@ -183,7 +183,7 @@ with tabs[0]:
                     tooltip=["month", "Count"]
                 )
             )
-            c2.altair_chart(chart2, width='stretch')
+            c2.altair_chart(chart2, use_container_width=True)
         else:
             c2.info("ℹ️ No renewal data in the last 12 months.")
     else:
@@ -230,7 +230,7 @@ with tabs[0]:
                     tooltip=["month:T", "Metric:N", alt.Tooltip("Value:Q", format=".1f")]
                 )
             )
-            st.altair_chart(chart3, width='stretch')
+            st.altair_chart(chart3, use_container_width=True)
         else:
             st.info("ℹ️ Not enough data to calculate retention trend.")
     else:
@@ -367,7 +367,7 @@ with tabs[2]:
         )
 
         # Action button
-        add_btn = st.button("✅ Add Member", width='stretch')
+        add_btn = st.button("✅ Add Member", use_container_width=True)
 
         if add_btn:
             # Validations
@@ -419,7 +419,7 @@ with tabs[3]:
         st.dataframe(
             sel_row[['Member ID', 'Name', 'Email', 'Phone', 'Start Date',
                      'End Date', 'Plan Type', 'Status', 'Notes']].to_frame().T,
-         width='stretch'
+            use_container_width=True
         )
 
         st.divider()
@@ -469,7 +469,7 @@ with tabs[3]:
             st.divider()
 
             # Save button
-            save_btn = st.form_submit_button("💾 Save Changes", width='stretch')
+            save_btn = st.form_submit_button("💾 Save Changes", use_container_width=True)
 
             if save_btn:
                 # apply quick renew by adding months to current end_date
@@ -503,32 +503,53 @@ with tabs[4]:
         # sanitize and save
         new_plans = {row['Plan']: int(row['DurationMonths']) for _, row in edited.iterrows()}
         save_plans(new_plans)
-        st.success("Plans saved. New plans will be available when adding members.")
+        st.success("Plans saved. New plans will be available when adding new members.")
         st.rerun()
 
     st.markdown("---")
     st.subheader("Manual CSV Management")
     st.write("You can download or upload the members CSV. Use upload cautiously — it will replace current data.")
-    dl = st.download_button("Download members CSV", data=members.to_csv(index=False).encode('utf-8'), file_name="members.csv", mime='text/csv')
 
+    # Download current members
+    dl = st.download_button(
+        "Download members CSV",
+        data=members.to_csv(index=False).encode('utf-8'),
+        file_name="members.csv",
+        mime='text/csv'
+    )
+
+    # Upload new members CSV
     uploaded = st.file_uploader("Upload a members CSV to replace current dataset", type=["csv"])
     if uploaded is not None:
         confirm = st.checkbox("I understand this will replace the current members data")
         if confirm:
             new_df = pd.read_csv(uploaded)
+
             # basic validation
             required = set(["Member ID", "Name", "Start Date", "End Date", "Plan Type"])
             if not required.issubset(set(new_df.columns)):
                 st.error(f"Uploaded CSV must contain columns: {required}")
             else:
-                # coerce dates
+                # --- Robust date parsing ---
                 for col in ["Start Date", "End Date"]:
-                    new_df[col] = pd.to_datetime(new_df[col], errors='coerce').dt.date
+                    # Strip whitespace and enforce YYYY-MM-DD
+                    new_df[col] = pd.to_datetime(
+                        new_df[col].astype(str).str.strip(),
+                        format="%Y-%m-%d",   # enforce consistent format
+                        errors="coerce"
+                    ).dt.date
+
+                # Debug: show rows where parsing failed
+                bad_rows = new_df[new_df["End Date"].isna()]
+                if not bad_rows.empty:
+                    st.warning("Some End Date values could not be parsed. Check these rows:")
+                    st.dataframe(bad_rows)
+
+                # Refresh status and save
                 new_df = refresh_status(new_df)
                 save_members(new_df)
                 st.success("Members CSV replaced successfully.")
                 st.rerun()
-
 # -------------------------
 # END
 # -------------------------
