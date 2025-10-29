@@ -11,7 +11,7 @@ import altair as alt
 st.set_page_config(page_title="Membership Tracker — Business Edition", layout="wide")
 DATA_FILE = "members.csv"
 PLANS_FILE = "plans.csv"
-DATE_FORMAT = "%Y-%m-%d"
+DATE_FORMAT = "%d-%m-%Y"
 
 DEFAULT_PLANS = {"Bronze":3,"Silver":6,"Gold":9,"Platinum":12}
 
