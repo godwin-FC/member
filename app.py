@@ -50,7 +50,7 @@ def save_plans(plans_dict):
 def generate_member_id(df):
     existing = df.get("Member ID",pd.Series(dtype=str)).dropna().astype(str)
     nums = [int(v[1:]) for v in existing if v.startswith("M") and v[1:].isdigit()]
-    return f"M{max(nums)+1:04d}" if nums else "M001"
+    return f"M{max(nums)+1:04d}" if nums else "M0001"
 
 def refresh_status(df):
     today = date.today()
@@ -162,7 +162,7 @@ with tabs[0]:
                 tooltip=["Plan", "Count"]
             )
         )
-        c1.altair_chart(chart1, width='stretch')
+        c1.altair_chart(chart1, use_container_width=True)
 
         # Monthly renewals (last 12 months)
         last_12 = today - timedelta(days=365)
@@ -183,7 +183,7 @@ with tabs[0]:
                     tooltip=["month", "Count"]
                 )
             )
-            c2.altair_chart(chart2, width='stretch')
+            c2.altair_chart(chart2, use_container_width=True)
         else:
             c2.info("ℹ️ No renewal data in the last 12 months.")
     else:
@@ -230,7 +230,7 @@ with tabs[0]:
                     tooltip=["month:T", "Metric:N", alt.Tooltip("Value:Q", format=".1f")]
                 )
             )
-            st.altair_chart(chart3, width='stretch')
+            st.altair_chart(chart3, use_container_width=True)
         else:
             st.info("ℹ️ Not enough data to calculate retention trend.")
     else:
@@ -367,7 +367,7 @@ with tabs[2]:
         )
 
         # Action button
-        add_btn = st.button("✅ Add Member", width='stretch')
+        add_btn = st.button("✅ Add Member", use_container_width=True)
 
         if add_btn:
             # Validations
@@ -419,7 +419,7 @@ with tabs[3]:
         st.dataframe(
             sel_row[['Member ID', 'Name', 'Email', 'Phone', 'Start Date',
                      'End Date', 'Plan Type', 'Status', 'Notes']].to_frame().T,
-         width='stretch'
+            use_container_width=True
         )
 
         st.divider()
@@ -469,7 +469,7 @@ with tabs[3]:
             st.divider()
 
             # Save button
-            save_btn = st.form_submit_button("💾 Save Changes", width='stretch')
+            save_btn = st.form_submit_button("💾 Save Changes", use_container_width=True)
 
             if save_btn:
                 # apply quick renew by adding months to current end_date
